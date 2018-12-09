@@ -1,0 +1,155 @@
+---
+title: "Basketball Double"
+author: "PJ Mu"
+date: "12/5/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(GGally)
+library(dplyr)
+library(arm)
+library(caTools)
+library(knitr)
+
+```
+
+## Introduction
+
+What is "Double-Double" in basketball?  A player who has scored at least 10 points and also racked up 10 assists, blocks, steals, or rebound in one single game is said to have scored a double-double. Though not as impressive as it seems to be, scoring a double-double is already a great achievement for a player in a single game. Our project today is about this basketball statistic, double-double, What is the most important factor that determine whether a player can score "double-double" in a game besides assists, blocks, steals, turnover, rebound, and points.
+
+The data is queryed from http://www.basketball-reference.com/, which has 7,3103 records of game statitics in NBA 2016 to 2017 season. Each row stands a NBA basketball player's performance in one single game. The variable `double` is created from variables `AST`, `BLK`, `STL`,`TRB`, and `PTS`. Below are some potential vairables used:
+
+* `MP`: time a player in on the court in a game (in minutes)
+* `pos`: position a player play in a team, there are five positions in total: Power Front (PF), Center (C), Point Guard (PG), Shooting Guard (SG), Small Forward(SF).
+* `Home`: Whether the player in a game is playing in home (1) or guest (0), 
+* `PF`: Personal Foul, which is is a breach of the rules that concerns illegal personal contact with an opponent.
+* `GmSc`:Game score is a metric developed by basketball statistician John Hollinger intended to give a total perspective on a player’s statistical performance in a basketball game.
+* `Tm`:  NBA teams (30 in total) each player serves.
+
+* `double`: whether a player score double-double in one game, 1 stand for yes and 0 stands for no.
+```{r, echo=FALSE}
+#import data
+load("games_seasons_16_17.Rdata")
+
+# summarize dataset
+position<-season_2016_2017%>%dplyr::select(pos,player_id)
+full.bball<-merge(position,games_2016_2017 , by = "player_id")
+full.bball<-na.omit(full.bball)
+
+# remove player didn't attend game (no stastistics)
+full.bball<-full.bball[- grep("Not", full.bball$MP),]
+full.bball<-full.bball[- grep("Inactive", full.bball$MP),]
+full.bball<-full.bball[- grep("Suspended", full.bball$AST),]
+full.bball<-unique(full.bball)
+
+
+# adjust variables
+full.bball$Home<-ifelse(full.bball$Home=="@",1,0)
+full.bball$Home<-factor(full.bball$Home)
+full.bball$STL<-as.numeric(full.bball$STL)
+full.bball$BLK<-as.numeric(full.bball$BLK)
+full.bball$PTS<-as.numeric(full.bball$PTS)
+full.bball$AST<-as.numeric(full.bball$AST)
+full.bball$TRB<-as.numeric(full.bball$TRB)
+
+full.bball$GmSc<-as.numeric(full.bball$GmSc)
+full.bball$MP<-gsub(":", ".", full.bball$MP)
+full.bball$MP<-as.numeric(full.bball$MP)
+
+
+full.bball$pos<-gsub("-C", "", full.bball$pos)
+full.bball$pos<-gsub("SG-","",full.bball$pos)
+full.bball$pos<-factor(full.bball$pos)
+
+
+full.bball$PF<-as.numeric(full.bball$PF)
+
+
+# create double
+
+full.bball$z1<-ifelse(full.bball$AST>=10 & full.bball$STL>=10,1,0)
+full.bball$z2<-ifelse(full.bball$AST>=10 & full.bball$BLK>=10,1,0)
+full.bball$z3<-ifelse(full.bball$AST>=10 & full.bball$PTS>=10,1,0)
+full.bball$z4<-ifelse(full.bball$AST>=10 & full.bball$TRB>=10,1,0)
+full.bball$z5<-ifelse(full.bball$STL>=10 & full.bball$BLK>=10,1,0)
+full.bball$z6<-ifelse(full.bball$STL>=10 & full.bball$PTS>=10,1,0)
+full.bball$z7<-ifelse(full.bball$STL>=10 & full.bball$TRB>=10,1,0)
+full.bball$z8<-ifelse(full.bball$BLK>=10 & full.bball$PTS>=10,1,0)
+full.bball$z9<-ifelse(full.bball$BLK>=10 & full.bball$TRB>=10,1,0)
+full.bball$z10<-ifelse(full.bball$PTS>=10 & full.bball$TRB>=10,1,0)
+
+full.bball<-full.bball%>%mutate(double = z1+z2+z3+z4+z5+z6+z7+z8+z9+z10)
+full.bball$double<-ifelse(full.bball$double==3|full.bball$double==1 ,1,0)
+full.bball$double<-factor(full.bball$double)
+
+```
+
+## Data Exploration
+
+Among all the variables considered, `MP`, `PF`, and `GmSc` are continous variables; `pos` and `Home` are discrete variables. First let's look at all the continuous variables and see if there are correlations among them. Time played and Game score are clearly correlated for its correlation coefficient is over 0.6, and only one is enough to explain this story. At the upper right part of the grid are six box-plots for discrete variables Home and position. There isn't a trend between these two discrete variables and other three continous variables, repsectively. 
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+ggpairs(full.bball[, c("MP", "PF", "GmSc","pos","Home")])
+```
+
+
+For different NBA team, there are different strategies to win games. Some teams with "star"" player like Lebron James in Cleveland Cavaliers (2016-2017) and James Harden in Houston Rocket tend to arrange "support - power" teamplay in the court and the rest of the player are in the supportive pattern of play. This could including passing more balls to the star, the field-goaler, in the team, blocking opponents to give enough space for him, and eventually rendering higher chance of double-double for the star player. However, for some teams with no "star" player, they can still win the game, but now with quite different startegy from coach team. For example, in Charlotte Hornet, There are no outstanding players in the 2016-2017 season and the "support-power" startegy is not a good choice for them. A strategy that fit Hornets lower the chance of accumulating field goals and rebounce to one single player or two. The frequency for "double-double" is lower compared to Rocket and Cavaliers.
+
+```{r, echo=FALSE}
+
+ggplot(full.bball)+geom_point()+aes(x=GmSc,y=double)+
+  facet_wrap(~Tm)+
+  xlab("Game Score")+ ylab("Double-Double")
+```
+
+Let's take two teams, New York Knicks and sacramento kings from the above grid of plots as examples. In Kings, players achieve high "Game Score" and get double-double in games, However, players who get double-double in games are usually not getting high "Game Score". This is caused by the different rosters from two teams and distinct strategies that best fit Kings' and Hornets' rosters. Therefore, it is reasonable to stratify NBA teams as one level when considering building the mixed effect logistic model for double-double.
+
+
+## Analysis
+
+
+Below we use the glmer command to estimate a mixed effects logistic regression model with `PF` and `GmSc`as player level continuous predictors, `pos` as a player level categorical predictor (PF, C, SG, PG, SF), `Home` as a team level categorical predictor, and a random intercept by `Tm`, team.
+
+```{r, echo=FALSE}
+m <- glmer(double ~ PF+ GmSc+pos+Home +
+    (1 | Tm), data = full.bball, family = binomial)
+    #, control = glmerControl(optimizer = "bobyqa"), nAGQ = 10)
+
+#summary(m)
+print(m, corr = FALSE)
+
+se <- sqrt(diag(vcov(m)))
+
+
+# table of estimates with 95% CI
+tab <- cbind(Est = fixef(m), LL = fixef(m) - 1.96 * se, UL = fixef(m) + 1.96 *
+    se)
+kable(exp(tab))
+```
+
+  From the GLMM fit, estimates are based on Laplace Approximation of the likelihood and random effect estimates represent the estimated variability in the intercept on the logit scale. By coverting tht logit scale back to odds ratio, it is easy to interpret each variable and the effect each has to do with double-double. 
+  
+
+  
+## Result and Discussion
+
+```{r, echo=FALSE}
+set.seed(777)
+sample=sample.split(full.bball,SplitRatio = 0.8)
+train1=subset(full.bball,sample=TRUE)
+test1=subset(full.bball,sample=FALSE)
+
+model_check<-glmer(double ~ PF+ GmSc+pos+Home +
+    (1 | Tm), data = train1, family = binomial)
+
+pred<-predict(model_check,test1,type="response")
+pred_double<-ifelse(pred>=0.5,1,0)
+tab <- table(pred_double,test1$double) 
+# misclassification error rate
+1-sum(diag(tab))/sum(tab)   
+```
+
+  For 1 point increase in "Game Score" or 1 more personal foul, there is expected to be 23% higher odds for a player to achieve doule-double in one game. This odds of double-double also differ in different position: Compare to Center, Power front has 48% lower odds of achieving doble-double; point guard has 81% lower odds of achieving doble-double; Small front has 82% lower odds of achieving doble-double; shooting guard has 94% lower odds of achieving doble-double. Home and guest doesn't seems to be a factor here that affect players to achieve double-doble. In addition, By usin the cross-validation check, the misclassifcation error rate is as low as 0.07. The mixed effect model makes strong is very predictive of double-double. 
